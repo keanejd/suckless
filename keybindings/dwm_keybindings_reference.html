@@ -1,0 +1,153 @@
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font-mono); }
+.wrap { padding: 1rem 0; }
+.search-bar { display: flex; gap: 8px; margin-bottom: 16px; }
+.search-bar input {
+  flex: 1; padding: 7px 12px; font-size: 13px; font-family: var(--font-mono);
+  background: var(--color-background-secondary); border: 1px solid var(--color-border-secondary);
+  border-radius: var(--border-radius-md); color: var(--color-text-primary); outline: none;
+}
+.search-bar input:focus { border-color: var(--color-border-primary); }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.tab {
+  padding: 4px 12px; font-size: 12px; font-family: var(--font-mono);
+  border-radius: var(--border-radius-md); border: 1px solid var(--color-border-secondary);
+  background: var(--color-background-secondary); color: var(--color-text-secondary);
+  cursor: pointer; transition: all .15s;
+}
+.tab.active, .tab:hover { background: var(--color-background-primary); color: var(--color-text-primary); border-color: var(--color-border-primary); }
+.tab.active { font-weight: 500; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead th { text-align: left; padding: 6px 10px; font-size: 11px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--color-text-tertiary); border-bottom: 1px solid var(--color-border-tertiary); }
+tbody tr { border-bottom: 1px solid var(--color-border-tertiary); transition: background .1s; }
+tbody tr:hover { background: var(--color-background-secondary); }
+tbody tr.hidden { display: none; }
+td { padding: 8px 10px; vertical-align: middle; }
+.key { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.kbd {
+  display: inline-block; padding: 2px 6px; font-family: var(--font-mono); font-size: 12px;
+  background: var(--color-background-secondary); border: 1px solid var(--color-border-secondary);
+  border-radius: 4px; color: var(--color-text-primary); white-space: nowrap;
+}
+.plus { color: var(--color-text-tertiary); font-size: 11px; }
+.desc { color: var(--color-text-secondary); }
+.badge {
+  display: inline-block; padding: 1px 6px; font-size: 10px; border-radius: 4px;
+  font-weight: 500; margin-left: 4px; vertical-align: middle;
+}
+.badge-layout { background: #E6F1FB; color: #0C447C; }
+.badge-tag    { background: #E1F5EE; color: #085041; }
+.badge-window { background: #FAEEDA; color: #633806; }
+.badge-system { background: #EEEDFE; color: #3C3489; }
+@media (prefers-color-scheme: dark) {
+  .badge-layout { background: #0C447C; color: #B5D4F4; }
+  .badge-tag    { background: #085041; color: #9FE1CB; }
+  .badge-window { background: #633806; color: #FAC775; }
+  .badge-system { background: #3C3489; color: #CECBF6; }
+}
+.count { font-size: 11px; color: var(--color-text-tertiary); margin-top: 10px; }
+</style>
+<div class="wrap">
+  <div class="search-bar">
+    <input id="q" type="text" placeholder="filter bindings..." oninput="filter()">
+  </div>
+  <div class="tabs" id="tabs">
+    <div class="tab active" onclick="setTab('all',this)">All</div>
+    <div class="tab" onclick="setTab('layout',this)">Layout</div>
+    <div class="tab" onclick="setTab('window',this)">Window</div>
+    <div class="tab" onclick="setTab('tag',this)">Tags</div>
+    <div class="tab" onclick="setTab('system',this)">System</div>
+  </div>
+  <table>
+    <thead><tr><th>Binding</th><th>Action</th></tr></thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  <div class="count" id="count"></div>
+</div>
+<script>
+const MOD = 'Mod';
+const data = [
+  // Layout
+  {cat:'layout', keys:[[MOD,'t']], desc:'Set tiled layout'},
+  {cat:'layout', keys:[[MOD,'f']], desc:'Set floating layout'},
+  {cat:'layout', keys:[[MOD,'m']], desc:'Set monocle layout'},
+  {cat:'layout', keys:[[MOD,'space']], desc:'Toggle previous layout'},
+  {cat:'layout', keys:[[MOD,'Shift','space']], desc:'Toggle floating for focused window'},
+  {cat:'layout', keys:[[MOD,'i']], desc:'Increase number of master windows'},
+  {cat:'layout', keys:[[MOD,'d']], desc:'Decrease number of master windows'},
+  {cat:'layout', keys:[[MOD,'h']], desc:'Decrease master area size'},
+  {cat:'layout', keys:[[MOD,'l']], desc:'Increase master area size'},
+  // Window focus & movement
+  {cat:'window', keys:[[MOD,'j']], desc:'Focus next window'},
+  {cat:'window', keys:[[MOD,'k']], desc:'Focus previous window'},
+  {cat:'window', keys:[[MOD,'Shift','j']], desc:'Move window down stack'},
+  {cat:'window', keys:[[MOD,'Shift','k']], desc:'Move window up stack'},
+  {cat:'window', keys:[[MOD,'Return']], desc:'Move focused window to master'},
+  {cat:'window', keys:[[MOD,'Shift','c']], desc:'Close focused window'},
+  {cat:'window', keys:[[MOD,'b']], desc:'Toggle status bar'},
+  {cat:'window', keys:[[MOD,'Tab']], desc:'Cycle to last used tag'},
+  // Monitors
+  {cat:'window', keys:[[MOD,',']], desc:'Focus previous monitor'},
+  {cat:'window', keys:[[MOD,'.']], desc:'Focus next monitor'},
+  {cat:'window', keys:[[MOD,'Shift',',']], desc:'Send window to previous monitor'},
+  {cat:'window', keys:[[MOD,'Shift','.']], desc:'Send window to next monitor'},
+  // Tags
+  {cat:'tag', keys:[[MOD,'1-9']], desc:'Switch to tag 1–9'},
+  {cat:'tag', keys:[[MOD,'Ctrl','1-9']], desc:'Toggle tag view (multi-tag)'},
+  {cat:'tag', keys:[[MOD,'Shift','1-9']], desc:'Move window to tag 1–9'},
+  {cat:'tag', keys:[[MOD,'Ctrl','Shift','1-9']], desc:'Toggle window on tag 1–9'},
+  {cat:'tag', keys:[[MOD,'0']], desc:'View all tags'},
+  {cat:'tag', keys:[[MOD,'Shift','0']], desc:'Tag window with all tags'},
+  // System
+  {cat:'system', keys:[[MOD,'Shift','Return']], desc:'Spawn terminal (st)'},
+  {cat:'system', keys:[[MOD,'p']], desc:'Spawn dmenu (app launcher)'},
+  {cat:'system', keys:[[MOD,'Shift','q']], desc:'Quit dwm'},
+];
+
+let activeTab = 'all';
+
+function kbd(parts) {
+  return parts.map(p => `<span class="kbd">${p}</span>`).join('<span class="plus"> + </span>');
+}
+
+function badgeFor(cat) {
+  return `<span class="badge badge-${cat}">${cat}</span>`;
+}
+
+function render(rows) {
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = rows.map(r => `
+    <tr data-cat="${r.cat}">
+      <td><span class="key">${kbd(r.keys[0])}</span></td>
+      <td><span class="desc">${r.desc}</span>${badgeFor(r.cat)}</td>
+    </tr>`).join('');
+}
+
+function filter() {
+  const q = document.getElementById('q').value.toLowerCase();
+  const rows = document.querySelectorAll('#tbody tr');
+  let vis = 0;
+  rows.forEach(row => {
+    const cat = row.dataset.cat;
+    const text = row.textContent.toLowerCase();
+    const catMatch = activeTab === 'all' || cat === activeTab;
+    const qMatch = !q || text.includes(q);
+    const show = catMatch && qMatch;
+    row.classList.toggle('hidden', !show);
+    if (show) vis++;
+  });
+  document.getElementById('count').textContent = `${vis} binding${vis !== 1 ? 's' : ''}`;
+}
+
+function setTab(tab, el) {
+  activeTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  filter();
+}
+
+render(data);
+filter();
+</script>
