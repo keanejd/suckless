@@ -1,0 +1,17 @@
+#!/bin/sh
+cap=$(cat /sys/class/power_supply/BAT0/capacity)
+status=$(cat /sys/class/power_supply/BAT0/status)
+
+if [ "$status" = "Charging" ]; then
+    icon=" \uf0e7 "   # nf-fa-bolt
+elif [ "$cap" -ge 75 ]; then
+    icon=" \uf240 "   # full
+elif [ "$cap" -ge 50 ]; then
+    icon=" \uf241 "
+elif [ "$cap" -ge 25 ]; then
+    icon=" \uf242 "
+else
+    icon=" \uf243 "   # low
+fi
+
+printf "%b %s%%\n" "$icon" "$cap"
